@@ -1,0 +1,253 @@
+nohup: ignoring input
+Some weights of the model checkpoint at ../model_weights/ESM-Pep/models--facebook--esm2_t33_650M_UR50D were not used when initializing EsmModel: ['lm_head.dense.bias', 'lm_head.decoder.weight', 'lm_head.layer_norm.weight', 'lm_head.layer_norm.bias', 'lm_head.bias', 'lm_head.dense.weight']
+- This IS expected if you are initializing EsmModel from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).
+- This IS NOT expected if you are initializing EsmModel from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).
+Some weights of EsmModel were not initialized from the model checkpoint at ../model_weights/ESM-Pep/models--facebook--esm2_t33_650M_UR50D and are newly initialized: ['esm.pooler.dense.weight', 'esm.pooler.dense.bias']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Some weights of the model checkpoint at ../model_weights/ESM-2/models--facebook--esm2_t33_650M_UR50D were not used when initializing EsmModel: ['lm_head.dense.bias', 'lm_head.layer_norm.weight', 'lm_head.layer_norm.bias', 'lm_head.bias', 'lm_head.dense.weight']
+- This IS expected if you are initializing EsmModel from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).
+- This IS NOT expected if you are initializing EsmModel from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).
+Some weights of EsmModel were not initialized from the model checkpoint at ../model_weights/ESM-2/models--facebook--esm2_t33_650M_UR50D and are newly initialized: ['esm.pooler.dense.weight', 'esm.pooler.dense.bias']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+The current date and time is 2025-02-23 11:37:47.488230
+################## model loaded on cuda #####################
+######### 1-th Play ###########
+Mutated seq HSQGTFTCEYSKYLEEERAREFVAWLLAGG
+Mutated seq HAQGTFTCEYSKYLEEERAREFVAWLLAGG
+Mutated seq HAQGTFTCEYSFYLEEERAREFVAWLLAGG
+Mutated seq HAQGTFTCEYSFYLEEECAREFVAWLLAGG
+Mutated seq HAQGTFTCEYSFYLEEECAREFVAWLRAGG
+Mutated seq HAQGTFTCEYSFYLNEECAREFVAWLRAGG
+Mutated seq HDQGTFTCEYSFYLNEECAREFVAWLRAGG
+Mutated seq HDQGTFTCEYSFYLNAECAREFVAWLRAGG
+Mutated seq HDWGTFTCEYSFYLNAECAREFVAWLRAGG
+Mutated seq HDWGTFTCEYSFMLNAECAREFVAWLRAGG
+Mutated seq HDWGTFLCEYSFMLNAECAREFVAWLRAGG
+Mutated seq HDWGWFLCEYSFMLNAECAREFVAWLRAGG
+Mutated seq PDWGWFLCEYSFMLNAECAREFVAWLRAGG
+Mutated seq PDWGWFLCEYSFMLNAECADEFVAWLRAGG
+######### 2-th Play ###########
+Mutated seq PDWGWFLCEYSFMLNAECAWEFVAWLRAGG
+######### 3-th Play ###########
+Mutated seq PDWGWFLCEYSFMLNAECAREFVAWLRACG
+######### 4-th Play ###########
+Mutated seq PDWGLFLCEYSFMLNAECAREFVAWLRAGG
+Mutated seq PDWGLFLCEYSFMLNAEYAREFVAWLRAGG
+######### 5-th Play ###########
+Mutated seq PDWGLFLCEYSFMVNAECAREFVAWLRAGG
+######### 6-th Play ###########
+Mutated seq PDWGLFLCESSFMLNAECAREFVAWLRAGG
+######### 7-th Play ###########
+Mutated seq PDWGLFLCRYSFMLNAECAREFVAWLRAGG
+Mutated seq FDWGLFLCRYSFMLNAECAREFVAWLRAGG
+######### 8-th Play ###########
+Mutated seq PDWSLFLCRYSFMLNAECAREFVAWLRAGG
+######### 9-th Play ###########
+Mutated seq PDWGLFLCRYSFMLNAECAREFDAWLRAGG
+######### 10-th Play ###########
+Mutated seq PDWGLFLCRYSFMLNAECAREFVAWLRATG
+######### 11-th Play ###########
+Mutated seq PDWGLRLCRYSFMLNAECAREFVAWLRAGG
+Mutated seq PDWGLRLCRYSFMLNAECAREFVAWLRGGG
+######### 12-th Play ###########
+Mutated seq PDWGLRLCRYSFMLNAECMREFVAWLRAGG
+######### 13-th Play ###########
+Mutated seq PDWGLRLCRSSFMLNAECAREFVAWLRAGG
+######### 14-th Play ###########
+Mutated seq PDWGLRLCRYSFMLNAECAAEFVAWLRAGG
+######### 15-th Play ###########
+Mutated seq PDWGLRLCRYSFMLNAECAREFVAWLGAGG
+######### 16-th Play ###########
+Mutated seq PDWGLRLCRYSFMLNAECAREFVAWLVAGG
+######### 17-th Play ###########
+Mutated seq PDWGLRLCRYSFMLNAECAREHVAWLRAGG
+######### 18-th Play ###########
+Mutated seq PDPGLRLCRYSFMLNAECAREFVAWLRAGG
+Mutated seq PAPGLRLCRYSFMLNAECAREFVAWLRAGG
+Mutated seq PMPGLRLCRYSFMLNAECAREFVAWLRAGG
+Mutated seq PMPSLRLCRYSFMLNAECAREFVAWLRAGG
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRAGG
+Mutated seq PMPSLRLCRYSWMLDAECAREFVAWLRAGG
+######### 19-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVVWLRAGG
+######### 20-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWARAGG
+######### 21-th Play ###########
+Mutated seq PMPSLRLCHYSWMLNAECAREFVAWLRAGG
+######### 22-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECKREFVAWLRAGG
+######### 23-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECARKFVAWLRAGG
+######### 24-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRTGG
+######### 25-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREWVAWLRAGG
+######### 26-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRAKG
+######### 27-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRAGT
+######### 28-th Play ###########
+Mutated seq PAPSLRLCRYSWMLNAECAREFVAWLRAGG
+######### 29-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFKAWLRAGG
+######### 30-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAPLRAGG
+######### 31-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRAGI
+######### 32-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRMGG
+######### 33-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNNECAREFVAWLRAGG
+######### 34-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAEYAREFVAWLRAGG
+######### 35-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRATG
+######### 36-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRVGG
+######### 37-th Play ###########
+Mutated seq PDPSLRLCRYSWMLNAECAREFVAWLRAGG
+######### 38-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLGAGG
+######### 39-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNQECAREFVAWLRAGG
+######### 40-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAAEFVAWLRAGG
+######### 41-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLVAGG
+######### 42-th Play ###########
+Mutated seq PMPSLRLCRYSWMVNAECAREFVAWLRAGG
+######### 43-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAYCAREFVAWLRAGG
+######### 44-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAELRAGG
+######### 45-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLQAGG
+######### 46-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRAGW
+######### 47-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLPAGG
+######### 48-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRAGP
+######### 49-th Play ###########
+Mutated seq PMPSWRLCRYSWMLNAECAREFVAWLRAGG
+######### 50-th Play ###########
+Mutated seq PMPSLRKCRYSWMLNAECAREFVAWLRAGG
+######### 51-th Play ###########
+Mutated seq PMPSLRLCRSSWMLNAECAREFVAWLRAGG
+######### 52-th Play ###########
+Mutated seq PMPSLRLCRYSWMWNAECAREFVAWLRAGG
+######### 53-th Play ###########
+Mutated seq PMPSLRLCRYSWQLNAECAREFVAWLRAGG
+######### 54-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECMREFVAWLRAGG
+######### 55-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAQLRAGG
+######### 56-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWRRAGG
+######### 57-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRAGD
+######### 58-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREFVAWLRGGG
+######### 59-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNLECAREFVAWLRAGG
+######### 60-th Play ###########
+Mutated seq PMPSLRLCRYSWMCNAECAREFVAWLRAGG
+######### 61-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAEVAREFVAWLRAGG
+######### 62-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAREHVAWLRAGG
+######### 63-th Play ###########
+Mutated seq PSPSLRLCRYSWMLNAECAREFVAWLRAGG
+######### 64-th Play ###########
+Mutated seq PMPSLRLCRYHWMLNAECAREFVAWLRAGG
+######### 65-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNKECAREFVAWLRAGG
+######### 66-th Play ###########
+Mutated seq EMPSLRLCRYSWMLNAECAREFVAWLRAGG
+######### 67-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECARWFVAWLRAGG
+######### 68-th Play ###########
+Mutated seq PMPSLRLCRYSWMLNAECAVEFVAWLRAGG
+######### 69-th Play ###########
+Random start replacement****
+Mutated seq PMPSAQLCRYSWMLIAECAREFVAWLRAPG
+Mutated seq PMPSAQLCRYSWMLIAECAREFVAWLVAPG
+######### 70-th Play ###########
+Mutated seq PMPSAQLCRYSWMLIAECAREFVAWLGAPG
+######### 71-th Play ###########
+Mutated seq PMPSAQLCRYSWMLIAECAREFVAWLRMPG
+Mutated seq PMPSAQLCRYSWMLIAECAREFVAWLRMKG
+Mutated seq PMPSAQLCRYSWMLIAEVAREFVAWLRMKG
+Mutated seq PMPSAQLCRYSWMLILEVAREFVAWLRMKG
+######### 72-th Play ###########
+Mutated seq PMPSAQLCRYSWMLIAEVAREFVAWLVMKG
+######### 73-th Play ###########
+Mutated seq PMPSAQLCRYSWMLIAEDAREFVAWLRMKG
+######### 74-th Play ###########
+Mutated seq PDPSAQLCRYSWMLIAEVAREFVAWLRMKG
+######### 75-th Play ###########
+Mutated seq PMPSAQLCRYSWMLIAEVAREFVAWSRMKG
+######### 76-th Play ###########
+Mutated seq PMPSAQLCRYSWMLICEVAREFVAWLRMKG
+######### 77-th Play ###########
+Mutated seq PKPSAQLCRYSWMLIAEVAREFVAWLRMKG
+######### 78-th Play ###########
+Mutated seq PMPSAQLCRYSWMLIWEVAREFVAWLRMKG
+Mutated seq PMPSAQLCRYSWMLIWEVAVEFVAWLRMKG
+######### 79-th Play ###########
+Mutated seq PAPSAQLCRYSWMLIWEVAREFVAWLRMKG
+######### 80-th Play ###########
+Mutated seq EMPSAQLCRYSWMLIWEVAREFVAWLRMKG
+######### 81-th Play ###########
+Mutated seq PMPSAQLCRYSWMLIWEVAREFVAWLRMKI
+Mutated seq PMPSAQLCRYSWMLIWEVAREFVAWLRVKI
+Mutated seq PMPSLQLCRYSWMLIWEVAREFVAWLRVKI
+Mutated seq PMPSLQLCRYSWMLIWEVARVFVAWLRVKI
+Mutated seq PMPSLQLCRYSWMLIWEVARVFVAWLRVTI
+Mutated seq PMPSLQLCRYSWMLIWEVATVFVAWLRVTI
+######### 82-th Play ###########
+Mutated seq PAPSLQLCRYSWMLIWEVARVFVAWLRVTI
+######### 83-th Play ###########
+Mutated seq PMPSLQLCRYSWMLIWEVAVVFVAWLRVTI
+######### 84-th Play ###########
+Mutated seq PMPSLQLCRYSWMLIKEVARVFVAWLRVTI
+######### 85-th Play ###########
+Mutated seq PMPSLQLCRYSWMLIWEVARVHVAWLRVTI
+######### 86-th Play ###########
+Mutated seq PSPSLQLCRYSWMLIWEVARVFVAWLRVTI
+######### 87-th Play ###########
+Mutated seq PMPSLQLCRYSWMLILEVARVFVAWLRVTI
+######### 88-th Play ###########
+Mutated seq PMLSLQLCRYSWMLIWEVARVFVAWLRVTI
+######### 89-th Play ###########
+Mutated seq PMPSLQLCRYHWMLIWEVARVFVAWLRVTI
+######### 90-th Play ###########
+Mutated seq PMPSLQLCRYSWMLIWEVARVFVAWLGVTI
+######### 91-th Play ###########
+Mutated seq PMPSLQLCRYSWMLIWEYARVFVAWLRVTI
+######### 92-th Play ###########
+Mutated seq PMPSLQLCRYSWMLIWEVARVFVAWLVVTI
+######### 93-th Play ###########
+Mutated seq PMPSLQLCRYSWMLIWEVARVFVSWLRVTI
+######### 94-th Play ###########
+Mutated seq PMPSLQLCRYSWYLIWEVARVFVAWLRVTI
+######### 95-th Play ###########
+Mutated seq PMPSLQLCRYSWMLIWEVARVFVAWLRMTI
+Mutated seq PMPSLQLCRYSWMLIWEVARVWVAWLRMTI
+Mutated seq PMPSLQLCRYSWMLIWEVARVWVAWARMTI
+######### 96-th Play ###########
+Mutated seq PMPSLQLCRYSWMLILEVARVWVAWLRMTI
+######### 97-th Play ###########
+Mutated seq PSPSLQLCRYSWMLIWEVARVWVAWLRMTI
+######### 98-th Play ###########
+Mutated seq PMPSLQLCRYSWHLIWEVARVWVAWLRMTI
+######### 99-th Play ###########
+Mutated seq PMPSLQLCRYSWMLIWEVARVWVAWLVMTI
+######### 100-th Play ###########
+Mutated seq PMPSLQLCRYRWMLIWEVARVWVAWLRMTI
+Output directory: 
+./results/7lll_R+5yqz_R/HSQGTFTSEYSKYLEEERAREFVAWLLAGG
+Total time taken: 1:55:03.946703s
+The current date and time is 2025-02-23 13:32:51.434970
+run.sh: line 26: $'\207\272\345\256\214\346\210\220\344\277\241\346\201\257': command not found
+-------Finished!-------
