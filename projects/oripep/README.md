@@ -21,8 +21,8 @@ ORIPEP is a toolkit for de novo peptide generation, mutation optimization, and p
 
 3. **Clone the Repository**:
    ```bash
-   git clone https://github.com/yourusername/ORIPEP.git
-   cd ORIPEP
+   git clone https://github.com/TencentAI4S/ori.git
+   cd ori/projects/oripep
    ```
 
 4. **Install Required Packages**:
