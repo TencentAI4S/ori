@@ -54,7 +54,7 @@ ORIDTP is a toolkit for de novo dual-target peptide generation, mutation optimiz
    
 6. **Download Receptor Data**:
 
-   Download the `receptor_data.zip` file and extract it to the `ORIDTP/PeDpAF` directory, specifically to `ORIDTP/PepDAF/receptor_data`. The receptor_data.zip is available on Zenodo: <https://doi.org/10.5281/zenodo.15597537>
+   Download the `receptor_data.zip` file and extract it to the `ORIDTP/PepDAF` directory, specifically to `ORIDTP/PepDAF/receptor_data`. The receptor_data.zip is available on Zenodo: <https://doi.org/10.5281/zenodo.15597537>
 
    After extraction, the `ORIDTP/PepDAF/receptor_data` directory should contain the following:
 
