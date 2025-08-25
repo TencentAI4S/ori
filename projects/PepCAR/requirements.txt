@@ -1,0 +1,16 @@
+pyparsing==3.1.0
+torch==2.0.1
+PyYAML==6.0
+pathtools==0.1.2
+typing_extensions==4.6.3
+numpy==1.24.3
+tqdm
+biopython
+transformers==4.30.2
+torch-cluster==1.6.3
+torch-geometric==2.6.1
+scipy==1.10.1
+rdkit-pypi
+dm-tree==0.1.7
+pandas==2.0.2
+joblib==1.2.0
