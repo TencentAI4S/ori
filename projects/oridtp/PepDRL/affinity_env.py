@@ -1,43 +1,74 @@
 # -*- coding: utf-8 -*-
 
+import copy
+import json
+import os
+import random
+import sys
+from typing import List, Union
+
 import numpy as np
 import torch
-import random
-import json
-from typing import List, Union
-from iupred.calculate_matrix_single import fasta_2_matrix
+from transformers import logging
+
+import residue_constants
 from esm.extract_pep_esm import get_peptide_embedding
 from esm.extract_pro_esm import get_protein_embedding
-from pep_to_smiles import pep_to_smile
 from graph.pep_graph import featurize_peptide_graph
-from graph.smi_graph import featurize_drug_graph
 from graph.pro_graph import featurize_protein_graph
-from PepAF.net import ASMNet
+from graph.smi_graph import featurize_drug_graph
+from iupred.calculate_matrix_single import fasta_2_matrix
+from pep_to_smiles import pep_to_smile
 from PepAF.amnet.net import AMNet
+from PepAF.net import ASMNet
 from PepAF.smnet.net import SMNet
-import residue_constants
-import sys
-import copy
-from transformers import logging
-import os
 
 logging.set_verbosity_warning()
 logging.set_verbosity_error()
+
 AAS = "ARNDCQEGHILKMFPSTWYV"
 
-def mutate_sequence(peptide_sequence, ex_list):
-    restypes = np.array(list(AAS))
-    seqlen = len(peptide_sequence)
+RECEPTOR_DIR = "../PepDAF/receptor_data"
+PEPAF_WEIGHTS = "../model_weights/PepAF"
+NUM_FOLDS = 5
+DUAL_WEIGHT = 0.5
+
+
+def string_to_one_hot(sequence: str, alphabet: str) -> np.ndarray:
+    matrix = np.zeros((len(sequence), len(alphabet)))
+    for position, residue in enumerate(sequence):
+        matrix[position, alphabet.index(residue)] = 1
+    return matrix
+
+
+def one_hot_to_string(one_hot: Union[List[List[int]], np.ndarray], alphabet: str) -> str:
+    indices = np.argmax(one_hot, axis=1)
+    return "".join(alphabet[i] for i in indices)
+
+
+def mutate_sequence(peptide_sequence, ex_list, mutable_positions=None):
+    """Randomly substitute three residues, resampling until the result is new.
+
+    Substitutions are drawn only from `mutable_positions` when it is given, so a
+    random restart cannot overwrite positions the user asked to keep.
+    """
+    residues = np.array(list(AAS))
+    if mutable_positions is None:
+        candidates = np.arange(len(peptide_sequence))
+    else:
+        candidates = np.array(sorted(mutable_positions), dtype=int)
+    n_sites = min(3, len(candidates))
+    if n_sites == 0:
+        return peptide_sequence
 
     while True:
-        seeds = peptide_sequence
-        pi_s = np.random.choice(np.arange(seqlen), 3, replace=False)
-        for pi in pi_s:
-            aa = np.random.choice(restypes, replace=False)
-            seeds = seeds[:pi] + aa + seeds[pi + 1:]
-        if seeds not in ex_list:
-            break
-    return seeds
+        candidate = peptide_sequence
+        for position in np.random.choice(candidates, n_sites, replace=False):
+            residue = np.random.choice(residues, replace=False)
+            candidate = candidate[:position] + residue + candidate[position + 1:]
+        if candidate not in ex_list:
+            return candidate
+
 
 def update_features(peptide_sequence):
     ids = fasta_2_matrix(peptide_sequence)
@@ -47,53 +78,55 @@ def update_features(peptide_sequence):
     smi_data = featurize_drug_graph(smiles)
     return pep_data, smi_data
 
-def predict_function(peptide_sequence, prot_data, dual_prot_data, models):
+
+def predict_function(peptide_sequence, prot_data, dual_prot_data, models, lam=DUAL_WEIGHT):
+    """Score a peptide against both receptors; `lam` weights the first target."""
     pep_data, smi_data = update_features(peptide_sequence)
-    y_prot_mean = 0
-    y_dual_mean = 0
-    lam = 0.5
+    prot_sum = 0.0
+    dual_sum = 0.0
     with torch.no_grad():
         for model in models:
             model.eval()
-            y_prot = model(prot_data, pep_data, smi_data)
-            y_dual = model(dual_prot_data, pep_data, smi_data)
+            prot_sum += model(prot_data, pep_data, smi_data).cpu().item()
+            dual_sum += model(dual_prot_data, pep_data, smi_data).cpu().item()
 
-            y_prot_mean = y_prot_mean + y_prot.cpu().item()
-            y_dual_mean = y_dual_mean + y_dual.cpu().item()
-
-    y_prot_mean /= len(models)
-    y_dual_mean /= len(models)
-
-    y_mean = lam * y_prot_mean + (1-lam) * y_dual_mean
+    y_prot_mean = prot_sum / len(models)
+    y_dual_mean = dual_sum / len(models)
+    y_mean = lam * y_prot_mean + (1 - lam) * y_dual_mean
     return y_mean, y_prot_mean, y_dual_mean
 
-def string_to_one_hot(sequence: str, alphabet: str) -> np.ndarray:
-    out = np.zeros((len(sequence), len(alphabet)))
-    for i in range(len(sequence)):
-        out[i, alphabet.index(sequence[i])] = 1
-    return out
-
-def one_hot_to_string(one_hot: Union[List[List[int]], np.ndarray], alphabet: str) -> str:
-    residue_idxs = np.argmax(one_hot, axis=1)
-    return "".join([alphabet[idx] for idx in residue_idxs])
 
 class Seq_env(object):
-    """sequence space for the env"""
-    def __init__(self, seq_len, alphabet, pdbid, dual_pdbid, starting_seq):
+    """Mutable peptide sequence acting as the RL environment state."""
+
+    def __init__(self, seq_len, alphabet, pdbid, dual_pdbid, starting_seq, lam=DUAL_WEIGHT,
+                 fixed_positions=None):
         self.move_count = 0
         self.seq_len = seq_len
         self.vocab_size = len(alphabet)
         self.alphabet = alphabet
         self.starting_seq = starting_seq
         self.seq = starting_seq
+        self.lam = lam
 
-        aa = residue_constants.sequence_to_onehot(
+        self.fixed_positions = set(fixed_positions or ())
+        out_of_range = [p for p in self.fixed_positions if not 0 <= p < seq_len]
+        if out_of_range:
+            raise ValueError(
+                f"fixed positions out of range for a {seq_len}-residue peptide: "
+                f"{sorted(p + 1 for p in out_of_range)}"
+            )
+        self.mutable_positions = [p for p in range(seq_len) if p not in self.fixed_positions]
+        if not self.mutable_positions:
+            raise ValueError("every position is fixed; at least one position must stay mutable")
+
+        onehot = residue_constants.sequence_to_onehot(
             sequence=self.seq,
             mapping=residue_constants.restype_order_with_x,
-            map_unknown_to_x=True
+            map_unknown_to_x=True,
         )
-        self.init_state = aa[:, 0:-1]
-        self.previous_init_state = aa[:, 0:-1]
+        self.init_state = onehot[:, 0:-1]
+        self.previous_init_state = onehot[:, 0:-1]
         self.init_state_count = 0
 
         self.unuseful_move = 0
@@ -113,40 +146,51 @@ class Seq_env(object):
         self.dual_prot_data = self.load_protein_data(dual_pdbid)
 
     def load_models(self, device):
-        amnets = [AMNet() for _ in range(5)]
-        smnets = [SMNet() for _ in range(5)]
-        PepAFs = [ASMNet(amnets[i], smnets[i]) for i in range(5)]
-
-        pretrained_path = '../model_weights/PepAF'
-        for i in range(5):
-            PepAFs[i].load_state_dict(torch.load(f'{pretrained_path}/fold_{i + 1}.pt', map_location=device), strict=False)
-
+        ensemble = [
+            ASMNet(AMNet(), SMNet())
+            for _ in range(NUM_FOLDS)
+        ]
+        for fold, model in enumerate(ensemble, start=1):
+            weights = torch.load(f"{PEPAF_WEIGHTS}/fold_{fold}.pt", map_location=device)
+            model.load_state_dict(weights, strict=False)
         print(f"################## model loaded on {device} #####################")
-        return PepAFs
+        return ensemble
 
     def load_protein_data(self, pdb_id):
-        esm_path = '../PepDAF/receptor_data/esm'
-        coord_json = '../PepDAF/receptor_data/coordinates.json'
-        epitope_path = '../PepDAF/receptor_data/rec_interface.json'
-        rec_path = '../PepDAF/receptor_data/mod_rec_seq.json'
+        coord_data = json.load(open(f"{RECEPTOR_DIR}/coordinates.json", "r"))
+        epitope_data = json.load(open(f"{RECEPTOR_DIR}/rec_interface.json", "r"))
+        rec_data = json.load(open(f"{RECEPTOR_DIR}/mod_rec_seq.json", "r"))
 
-        coord_data = json.load(open(coord_json, 'r'))
-        epitope_data = json.load(open(epitope_path, 'r'))
-        rec_data = json.load(open(rec_path, 'r'))
-        esm_embed_path = f"{esm_path}/{pdb_id}.pt"
-        if not os.path.exists(esm_embed_path):
-            esm_embed = get_peptide_embedding(rec_data[pdb_id])
+        embed_file = f"{RECEPTOR_DIR}/esm/{pdb_id}.pt"
+        if os.path.exists(embed_file):
+            esm_embed = torch.load(embed_file)
         else:
-            esm_embed = torch.load(esm_embed_path)
+            esm_embed = get_peptide_embedding(rec_data[pdb_id])
 
-        _coords = coord_data[pdb_id]
+        coords = coord_data[pdb_id]
         entry = {
             "seq": rec_data[pdb_id],
-            "coords": list(zip(_coords["N"], _coords["CA"], _coords["C"], _coords["O"])),
+            "coords": list(zip(coords["N"], coords["CA"], coords["C"], coords["O"])),
             "embed": esm_embed,
-            "epitope": epitope_data[pdb_id]
+            "epitope": epitope_data[pdb_id],
         }
         return featurize_protein_graph(entry)
+
+    def _evaluate(self, combo, cache):
+        """Return (fitness, loss, loss_A, loss_B) for a sequence, using the
+        playout cache when available and optionally populating it."""
+        if combo in self.playout_dict:
+            fitness, loss_a, loss_b = self.playout_dict[combo]
+            return fitness, 1 / (1000 * fitness), loss_a, loss_b
+
+        y, y_prot, y_dual = predict_function(
+            combo, self.prot_data, self.dual_prot_data, self.models, lam=self.lam
+        )
+        fitness = y / 1000
+        result = (fitness, 1 / y, 1 / y_prot, 1 / y_dual)
+        if cache:
+            self.playout_dict[combo] = [fitness, 1 / y_prot, 1 / y_dual]
+        return result
 
     def init_seq_state(self):
         self.previous_fitness = -float("inf")
@@ -160,41 +204,40 @@ class Seq_env(object):
         self.init_combo = combo
         self.episode_seqs.append(combo)
 
-        y, y_prot, y_dual = predict_function(combo, self.prot_data, self.dual_prot_data, self.models)
+        y, y_prot, y_dual = predict_function(
+            combo, self.prot_data, self.dual_prot_data, self.models, lam=self.lam
+        )
         self.loss = 1 / y
         self.loss_A = 1 / y_prot
         self.loss_B = 1 / y_dual
-        reward = y
-        self._state_fitness = reward / 1000
-        self.availables = list(range(self.seq_len * self.vocab_size))
+        self._state_fitness = y / 1000
 
+        self.availables = list(range(self.seq_len * self.vocab_size))
         self.update_availables(combo)
+        if self.fixed_positions:
+            self.availables = [
+                action for action in self.availables
+                if action // self.vocab_size not in self.fixed_positions
+            ]
 
         self.states = {}
         self.last_move = -1
         self.previous_init_state = copy.deepcopy(self._state)
 
     def update_availables(self, combo):
-        for i, a in enumerate(combo):
-            self.availables.remove(self.vocab_size * i + AAS.index(a))
-        for e_s in self.episode_seqs:
-            a_e_s = string_to_one_hot(e_s, AAS)
-            a_e_s_ex = np.expand_dims(a_e_s, axis=0)
-            if 'nda' not in locals():
-                nda = a_e_s_ex
-            else:
-                nda = np.concatenate((nda, a_e_s_ex), axis=0)
+        for position, residue in enumerate(combo):
+            self.availables.remove(self.vocab_size * position + AAS.index(residue))
 
-        c_i_s = string_to_one_hot(combo, AAS)
-        for i, aa in enumerate(combo):
-            tmp_c_i_s = np.delete(c_i_s, i, axis=0)
-            for slice in nda:
-                tmp_slice = np.delete(slice, i, axis=0)
-                if (tmp_c_i_s == tmp_slice).all():
-                    bias = np.where(slice[i] != 0)[0][0]
-                    to_be_removed = self.vocab_size * i + bias
-                    if to_be_removed in self.availables:
-                        self.availables.remove(to_be_removed)
+        seen = np.stack([string_to_one_hot(seq, AAS) for seq in self.episode_seqs])
+        current = string_to_one_hot(combo, AAS)
+        for position in range(len(combo)):
+            current_rest = np.delete(current, position, axis=0)
+            for seq_onehot in seen:
+                if (current_rest == np.delete(seq_onehot, position, axis=0)).all():
+                    residue_idx = np.where(seq_onehot[position] != 0)[0][0]
+                    action = self.vocab_size * position + residue_idx
+                    if action in self.availables:
+                        self.availables.remove(action)
 
     def current_state(self):
         return self._state.T
@@ -214,38 +257,11 @@ class Seq_env(object):
             self._state[pos] = 0
             self._state[pos, res] = 1
             combo = one_hot_to_string(self._state, AAS)
-            
-            if playout==0:
-                if combo not in self.playout_dict.keys():
-                    y, y_prot, y_dual = predict_function(combo, self.prot_data, self.dual_prot_data, self.models)
-                    self.loss = 1/y
-                    self.loss_A = 1 / y_prot
-                    self.loss_B = 1 / y_dual
-                    reward = y
-                    self._state_fitness = reward/1000
-
-                else:
-                    self._state_fitness = self.playout_dict[combo][0]
-                    self.loss = 1/(1000*self._state_fitness)
-
-                    self.loss_A = self.playout_dict[combo][1]
-                    self.loss_B = self.playout_dict[combo][2]
-            else:
-                if combo not in self.playout_dict.keys():
-
-                    y, y_prot, y_dual = predict_function(combo, self.prot_data, self.dual_prot_data, self.models)
-                    self.loss = 1/y
-                    self.loss_A = 1 / y_prot
-                    self.loss_B = 1/ y_dual
-                    reward = y
-                    self._state_fitness = reward/1000
-                    self.playout_dict[combo] = [reward/1000, 1/y_prot, 1/y_dual]
-                else:
-                    self._state_fitness = self.playout_dict[combo][0]
-                    self.loss = 1/(1000*self._state_fitness)
-
-                    self.loss_A = self.playout_dict[combo][1]
-                    self.loss_B = self.playout_dict[combo][2]
+            fitness, loss, loss_a, loss_b = self._evaluate(combo, cache=bool(playout))
+            self._state_fitness = fitness
+            self.loss = loss
+            self.loss_A = loss_a
+            self.loss_B = loss_b
 
         current_seq = one_hot_to_string(self._state, AAS)
         if current_seq in self.episode_seqs:
@@ -254,109 +270,86 @@ class Seq_env(object):
             self.loss_A = 0.0
         else:
             self.episode_seqs.append(current_seq)
+
         if self._state_fitness > self.previous_fitness:
             self.init_state = copy.deepcopy(self._state)
             self.init_state_count = 0
-        if move==0:
+        if move == 0:
             self.move_0_flag = True
         self.last_move = move
 
     def mutation_end(self):
-        return self.repeated_seq_ocurr or self.unuseful_move == 1 or self._state_fitness < self.previous_fitness or self.move_0_flag
+        return (
+            self.repeated_seq_ocurr
+            or self.unuseful_move == 1
+            or self._state_fitness < self.previous_fitness
+            or self.move_0_flag
+        )
 
 
 class Mutate(object):
-    """mutating server"""
+    """Runs one self-play optimization episode over the sequence environment."""
 
     def __init__(self, Seq_env, **kwargs):
         self.Seq_env = Seq_env
 
-    def start_p_mutating(self, player1, player2, start_player=0, is_shown=1):
-        """start a game between two players"""
-        if start_player not in (0, 1):
-            raise Exception('start_player should be either 0 (player1 first) '
-                            'or 1 (player2 first)')
-        self.Seq_env.init_board(start_player)
-        p1, p2 = self.Seq_env.players
-        player1.set_player_ind(p1)
-        player2.set_player_ind(p2)
-        players = {p1: player1, p2: player2}
-        if is_shown:
-            self.graphic(self.Seq_env, player1.player, player2.player)
-        while True:
-            current_player = self.Seq_env.get_current_player()
-            player_in_turn = players[current_player]
-            move = player_in_turn.get_action(self.Seq_env)
-            self.Seq_env.do_move(move)
-            if is_shown:
-                self.graphic(self.Seq_env, player1.player, player2.player)
-            end, winner = self.Seq_env.game_end()
-            if end:
-                if is_shown:
-                    if winner != -1:
-                        print("Game end. Winner is", players[winner])
-                    else:
-                        print("Game end. Tie")
-                return winner
+    def _maybe_restart(self, jumpout):
+        env = self.Seq_env
+        if (env.previous_init_state == env.init_state).all():
+            env.init_state_count += 1
+        if env.init_state_count < jumpout:
+            return
+        print("Random start replacement****")
+        current_start_seq = one_hot_to_string(env.init_state, AAS)
+        excluded = list(set(
+            copy.deepcopy(env.episode_seqs)
+            + copy.deepcopy(list(env.playout_dict.keys()))
+        ))
+        new_start_seq = mutate_sequence(current_start_seq, excluded, env.mutable_positions)
+        env.init_state = string_to_one_hot(new_start_seq, env.alphabet).astype(np.float32)
+        env.init_state_count = 0
 
     def start_mutating(self, mutater, is_shown=0, temp=1e-3, jumpout=50):
-        """ start mutating using a MCTS player, reuse the search tree,
-        and store the self-play data: (state, mcts_probs, z) for training
-        """
+        self._maybe_restart(jumpout)
+        env = self.Seq_env
+        env.init_seq_state()
 
-        if (self.Seq_env.previous_init_state == self.Seq_env.init_state).all():
-            self.Seq_env.init_state_count += 1
-        if self.Seq_env.init_state_count >= jumpout:
-            print("Random start replacement****")
-            current_start_seq = one_hot_to_string(self.Seq_env.init_state, AAS)
-            episode_seqs = copy.deepcopy(self.Seq_env.episode_seqs)
-            playout_seqs = copy.deepcopy(list(self.Seq_env.playout_dict.keys()))
-            e_p_list = list(set(episode_seqs + playout_seqs))
-            new_start_seq = mutate_sequence(current_start_seq, e_p_list)
-            self.Seq_env.init_state = string_to_one_hot(new_start_seq, self.Seq_env.alphabet).astype(np.float32)
-            self.Seq_env.init_state_count = 0
-
-        self.Seq_env.init_seq_state()
-        # print("Start sequence：{}".format(self.Seq_env.init_combo))
-        generated_peptide = []
-
-        fit_result = []
-        play_seqs_list = []
-        play_losses_list = []
-
+        generated_peptide, fit_result = [], []
+        play_seqs_list, play_losses_list = [], []
         loss_A, loss_B = [], []
-
-        states, mcts_probs, reward_z = [], [], [] #, current_players #, []
+        states, mcts_probs, reward_z = [], [], []
 
         while True:
-            move, move_probs, play_seqs, play_losses = mutater.get_action(self.Seq_env,   #,m_p_dict
-                                                 temp=temp,
-                                                 return_prob=1)
-            self.Seq_env.playout_dict.update(mutater.m_p_dict)
+            move, move_probs, play_seqs, play_losses = mutater.get_action(
+                env, temp=temp, return_prob=1
+            )
+            env.playout_dict.update(mutater.m_p_dict)
+
             if play_seqs:
                 play_seqs_list.extend(play_seqs)
                 play_losses_list.extend(play_losses)
+
             if move:
-                states.append(self.Seq_env.current_state())
+                states.append(env.current_state())
                 mcts_probs.append(move_probs)
-                reward_z.append(self.Seq_env._state_fitness)
-                loss_A.append(self.Seq_env.loss_A)
-                loss_B.append(self.Seq_env.loss_B)
+                reward_z.append(env._state_fitness)
+                loss_A.append(env.loss_A)
+                loss_B.append(env.loss_B)
 
-                self.Seq_env.do_mutate(move)
-                generated_peptide.append(one_hot_to_string(self.Seq_env._state, AAS))
+                env.do_mutate(move)
+                generated_peptide.append(one_hot_to_string(env._state, AAS))
+                fit_result.append(env._state_fitness)
+                print("Mutated seq", one_hot_to_string(env._state, AAS))
 
-                fit_result.append(self.Seq_env._state_fitness)
-
-                state_string = one_hot_to_string(self.Seq_env._state, AAS)
-                print("Mutated seq", state_string)
-
-
-            end = self.Seq_env.mutation_end()
-            if end:
+            if env.mutation_end():
                 mutater.reset_Mutater()
                 if is_shown:
-
                     print("Mutation end.")
-                playout_dict = copy.deepcopy(self.Seq_env.playout_dict)
-                return zip(states, mcts_probs, reward_z), zip(generated_peptide, fit_result, loss_A, loss_B), play_seqs_list, play_losses_list, playout_dict
+                playout_dict = copy.deepcopy(env.playout_dict)
+                return (
+                    zip(states, mcts_probs, reward_z),
+                    zip(generated_peptide, fit_result, loss_A, loss_B),
+                    play_seqs_list,
+                    play_losses_list,
+                    playout_dict,
+                )

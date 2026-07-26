@@ -250,3 +250,226 @@ Then, return to the `PepDAF` directory and run batch prediction:
 cd ORIDTP/PepDAF
 python predict.py --task batch
 ```
+
+---
+
+## Case Study: Applying ORIDTP to an Arbitrary Dual-Target Pair
+
+ORIDTP is not restricted to GLP-1R/GCGR; that pair is only the default example shipped in the
+run scripts. This section walks through a complete campaign (generation -> reinforcement
+optimization -> screening) for an arbitrary pair of targets, denoted `TargetA` and `TargetB`.
+Both can be any two receptor PDB IDs listed in
+`PepDAF/receptor_data/supported_receptor_pdbid.txt` (the shipped example uses `7lll_R` for
+GLP-1R and `5yqz_R` for GCGR).
+
+Note that the dual-target objective is not introduced during generation: PepDif is conditioned
+on a single receptor, while the two targets are combined in the PepDRL reward and evaluated
+separately during PepDAF screening.
+
+### Step 0: Retrieve the two receptor sequences
+
+For any supported PDB ID, the receptor sequence is already available in the downloaded
+receptor data, so no external lookup is required:
+
+```python
+import json
+
+receptors = json.load(open('PepDAF/receptor_data/mod_rec_seq.json'))
+print(receptors['TargetA'])
+print(receptors['TargetB'])
+```
+
+### Step 1: Generate candidate peptides for each target (PepDif)
+
+Create one input file per target under `PepDif/pepdif/example/`, named `<split>.jsonl`. Each
+line conditions one generated peptide on the given receptor sequence, so repeat the line as
+many times as the number of candidates you want:
+
+`PepDif/pepdif/example/test_TargetA.jsonl`
+```
+{"src": "<sequence of TargetA>", "trg": "X"}
+{"src": "<sequence of TargetA>", "trg": "X"}
+...
+```
+
+Then decode with the **generic** model for each target:
+
+```bash
+cd PepDif/scripts
+python -u run_decode.py --model_path ../model_weights/PepDif/PepDif.pt \
+    --seed 0 --split test_TargetA --top_p -1 --step 2000 --bsz 60
+python -u run_decode.py --model_path ../model_weights/PepDif/PepDif.pt \
+    --seed 0 --split test_TargetB --top_p -1 --step 2000 --bsz 60
+```
+
+The `--split` argument selects `pepdif/example/<split>.jsonl` and results are written to a
+split-specific directory, e.g. `PepDif/generation_outputs_test_TargetA_-1/PepDif/seed0_step0.json`,
+so runs for different targets do not overwrite each other. The output holds one JSON object per
+line, with the generated peptide in `recover` and the conditioning receptor in `source`:
+
+```
+{"recover": "<generated peptide>", "source": "<sequence of TargetA>"}
+```
+
+Important: use the generic checkpoint `PepDif.pt` for new targets. The checkpoint
+`PepDif_glp1rgcgr.pt` was further enhanced with virtual feedback on GLP-1R/GCGR and is
+specific to that pair.
+
+### Step 2: Dual-target optimization (PepDRL)
+
+`--pdbid` and `--dual_pdbid` define the reward, while `--start_sequence` defines where the
+search begins. All runs below use the same dual-target reward and differ only in their starting
+sequence, so the four resulting candidate sets are simply pooled and compared in Step 3:
+
+| Run | Starting sequence |
+| --- | --- |
+| A | a peptide generated for TargetA |
+| B | a peptide generated for TargetB |
+| A+B | the TargetA peptide followed by the TargetB peptide |
+| B+A | the TargetB peptide followed by the TargetA peptide |
+
+Build the four starting sequences from the Step 1 outputs:
+
+```python
+import json
+
+def load_generated(path):
+    with open(path) as f:
+        return [json.loads(line)['recover'] for line in f if line.strip()]
+
+pep_a = load_generated('PepDif/generation_outputs_test_TargetA_-1/PepDif/seed0_step0.json')[0]
+pep_b = load_generated('PepDif/generation_outputs_test_TargetB_-1/PepDif/seed0_step0.json')[0]
+
+linker = 'GGGGS'
+fused_ab = pep_a + linker + pep_b
+fused_ba = pep_b + linker + pep_a
+
+# 1-based positions occupied by the linker in each fused sequence
+linker_ab = f'{len(pep_a) + 1}-{len(pep_a) + len(linker)}'
+linker_ba = f'{len(pep_b) + 1}-{len(pep_b) + len(linker)}'
+```
+
+A linker is optional; the two peptides can also be joined directly. Since a fused sequence is
+longer than either peptide alone, trimming each part to its core binding region keeps the
+candidate close to the length range of the peptides seen during training (roughly 12-30
+residues); the boundaries are chosen by the user.
+
+Run each starting sequence against the dual-target reward:
+
+```bash
+cd PepDRL
+# single generated peptide as the starting point
+python train.py --pdbid TargetA --dual_pdbid TargetB \
+    --start_sequence TSFAEYWNLLSP \
+    --n_playout 20 --niter 100 --batch_size 1 --jumpout 32 --c_puct 0.5 \
+    --output_dir ./results/TargetA+TargetB/pep_a
+
+# fused starting point, e.g. TSFAEYWNLLSP + GGGGS + ETFSDLWKLLPE (29 residues)
+python train.py --pdbid TargetA --dual_pdbid TargetB \
+    --start_sequence TSFAEYWNLLSPGGGGSETFSDLWKLLPE \
+    --fixed_positions '13-17' \
+    --n_playout 20 --niter 100 --batch_size 1 --jumpout 32 --c_puct 0.5 \
+    --output_dir ./results/TargetA+TargetB/fused_ab
+```
+
+Repeat for `pep_b` and for `fused_ba`. Setting `--pdbid` and `--dual_pdbid` to the same ID
+reduces the reward to a single target, which is useful for single-target reference runs.
+
+`--fixed_positions` keeps chosen residues from being mutated, which is convenient for holding a
+linker or known anchor residues in place. It takes 1-based positions and ranges, e.g. `'13-17'`
+or `'1,4,13-17'`, and also constrains the random-restart mechanism so protected residues survive
+the whole run. All positions are mutable when the option is omitted.
+
+#### Reward weighting and output
+
+The dual-target reward is `lam * y(pdbid) + (1 - lam) * y(dual_pdbid)`, where `y` is the
+predicted affinity. `--lam` defaults to `0.5`, i.e. both targets are weighted equally and the
+reward is symmetric in the two targets. Use `--lam` to prioritize one target, for example
+`--lam 0.7` to favour `--pdbid` over `--dual_pdbid`.
+
+Results are written to `<output_dir>/Move_and_playout.csv` with one row per evaluated peptide:
+
+| Column | Meaning |
+| --- | --- |
+| `peptide` | the evaluated sequence |
+| `loss` | reciprocal of the combined dual-target score (`1 / y`), so **lower is better** |
+| `losses_A` | reciprocal of the predicted affinity for `--pdbid` |
+| `losses_B` | reciprocal of the predicted affinity for `--dual_pdbid` |
+
+Because the columns are reciprocals, rank candidates in ascending order; the predicted
+affinity is recovered as `1 / loss`.
+
+### Step 3: Batch screening of the optimized candidates (PepDAF)
+
+Pool the best peptides from all Step 2 runs into a single batch input, so that candidates from
+the different starting points are compared on the same footing:
+
+```python
+import glob
+import pandas as pd
+
+frames = [pd.read_csv(path) for path in
+          glob.glob('PepDRL/results/TargetA+TargetB/*/Move_and_playout.csv')]
+pooled = pd.concat(frames).drop_duplicates('peptide')
+top = pooled.sort_values('loss').head(50)   # lower loss = higher predicted affinity
+top['peptide'].to_csv('PepDAF/utils/preprocess/peptide.txt', index=False, header=False)
+```
+
+List **both** receptors in `PepDAF/utils/preprocess/target.txt`, one per line, so that every
+peptide is scored against both targets in a single run:
+
+```
+TargetA
+TargetB
+```
+
+Then extract features and predict:
+
+```bash
+cd PepDAF/utils/preprocess
+sh start.sh
+cd ../..
+python predict.py --task batch
+```
+
+`PepDAF/output/batch.tsv` contains one row per (target, peptide) pair, where `pro_name` is the
+receptor, `pep_seq` the peptide and `y_pred` the predicted affinity (higher is better). Pivot
+it to rank candidates by dual-target criteria:
+
+```python
+import pandas as pd
+
+df = pd.read_csv('PepDAF/output/batch.tsv', sep='\t')
+wide = df.pivot_table(index='pep_seq', columns='pro_name', values='y_pred')
+wide['weakest'] = wide[['TargetA', 'TargetB']].min(axis=1)          # dual-target potency
+wide['gap'] = (wide['TargetA'] - wide['TargetB']).abs()             # balance between targets
+print(wide.sort_values('weakest', ascending=False).head(20))
+```
+
+Ranking by `weakest` favours peptides that bind both targets well, while a small `gap`
+indicates a balanced dual-target profile.
+
+### Adding a receptor that is not in the supported list
+
+A receptor is defined by a few per-ID entries in `PepDAF/receptor_data/`. To register a new
+receptor `<new_id>`, add:
+
+1. `mod_rec_seq.json`: `"<new_id>": "<receptor sequence>"`.
+2. `coordinates.json`: `"<new_id>": {"N": [...], "CA": [...], "C": [...], "O": [...]}`, the
+   backbone coordinates taken from the receptor structure.
+3. `rec_interface.json`: `"<new_id>": [...]`, the binding-interface (epitope) residues.
+4. `esm/<new_id>.pt`: add `<new_id>` to `PepDAF/utils/preprocess/target.txt` and run
+   `python extract_pro_esm.py`. This step is optional, as the embedding is computed on the fly
+   when the file is absent.
+5. `supported_receptor_pdbid.txt`: append `<new_id>`.
+
+The new ID can then be used anywhere `TargetA`/`TargetB` appear above, with no code changes.
+
+### Notes
+
+- `run_oridtp.py` runs the shipped GLP-1R/GCGR example; use the commands in this section to
+  work with other targets.
+- Receptor IDs follow the `<pdb>_<chain>` convention and are split on the underscore during
+  batch preprocessing, so keep exactly one underscore in each ID.
+- `--lam` and `--fixed_positions` both default to the previous behaviour (equal weighting of the
+  two targets and no positional constraints), so existing commands are unaffected.
