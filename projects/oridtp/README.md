@@ -253,11 +253,11 @@ python predict.py --task batch
 
 ---
 
-## Case Study: Applying ORIDTP to an Arbitrary Dual-Target Pair
+## Case Study: Applying ORIDTP to another Dual-Target Pair
 
 ORIDTP is not restricted to GLP-1R/GCGR; that pair is only the default example shipped in the
 run scripts. This section walks through a complete campaign (generation -> reinforcement
-optimization -> screening) for an arbitrary pair of targets, denoted `TargetA` and `TargetB`.
+optimization -> screening) for another pair of targets, denoted `TargetA` and `TargetB`.
 Both can be any two receptor PDB IDs listed in
 `PepDAF/receptor_data/supported_receptor_pdbid.txt` (the shipped example uses `7lll_R` for
 GLP-1R and `5yqz_R` for GCGR).

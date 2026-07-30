@@ -3,8 +3,8 @@
 ORI-PepCompass is an AI toolkit that integrates cross-domain knowledge transfer, self-distillation, and reinforcement learning for peptide bioactivity prediction, developability assessment, and sequence optimization. It comprises three modules:
 
 - **PepB** — bioactivity prediction (in vitro protein–peptide activity).
-- **PepD** — multi-attribute developability assessment (9 unified properties: allergenicity, half-life, hemolysis, non-fouling, permeability, solubility, stability, and toxicity).
-- **PepR** — reinforcement learning-based peptide optimization and de novo generation (guided by PepB).
+- **PepD** — multi-attribute developability assessment (e.g., allergenicity, half-life, hemolysis, non-fouling, permeability, solubility, stability, and toxicity).
+- **PepR** — reinforcement learning-based peptide optimization and de novo generation.
 
 ![image](./overview.png)
 
