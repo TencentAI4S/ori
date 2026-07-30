@@ -5,6 +5,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 import torch
 import json
+import os
 import psutil
 import datasets
 from datasets import Dataset as Dataset2
@@ -156,15 +157,14 @@ def get_corpus(data_args, seq_len, split='train', loaded_vocab=None):
 
     sentence_lst = {'src':[], 'trg': []}
 
-    if split == 'test':
-        print('### Loading form the TEST set...')
-        path = f'pepdif/example/test.jsonl'
-
-    elif split == 'test_glp1rgcgr':
-        print('### Loading form the TEST set...')
-        path = f'pepdif/example/test_glp1rgcgr.jsonl'
-    else:
-        assert False, "invalid split for dataset"
+    print('### Loading form the TEST set...')
+    path = f'pepdif/example/{split}.jsonl'
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"No input file for split '{split}': expected '{path}'. Create it with one "
+            'JSON object per line, e.g. {"src": "<receptor sequence>", "trg": "X"}, '
+            'using one line per peptide to be generated.'
+        )
 
     with open(path, 'r') as f_reader:
         for row in f_reader:

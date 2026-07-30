@@ -11,7 +11,7 @@ if __name__ == '__main__':
     parser.add_argument('--step', type=int, default=2000, help='if less than diffusion training steps, like 1000, use ddim sampling')
 
     parser.add_argument('--bsz', type=int, default=60, help='batch size')
-    parser.add_argument('--split', type=str, default='test', choices=['test', 'test_glp1rgcgr'], help='dataset split used to decode')
+    parser.add_argument('--split', type=str, default='test', help='dataset split used to decode; reads pepdif/example/<split>.jsonl')
 
     parser.add_argument('--top_p', type=int, default=1, help='top p used in sampling, default is off')
     parser.add_argument('--pattern', type=str, default='ema', help='training pattern')
@@ -30,6 +30,8 @@ if __name__ == '__main__':
         out_dir = f'generation_outputs_{args.top_p}'
     elif args.split == 'test_glp1rgcgr':
         out_dir = f'generation_outputs_glp1rgcgr_{args.top_p}'
+    else:
+        out_dir = f'generation_outputs_{args.split}_{args.top_p}'
 
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)

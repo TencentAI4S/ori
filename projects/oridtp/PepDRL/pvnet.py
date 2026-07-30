@@ -1,104 +1,114 @@
 # -*- coding: utf-8 -*-
 
+import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-from torch.autograd import Variable
-import numpy as np
-
-
-def set_learning_rate(optimizer, lr):
-    """Sets the learning rate to the given value"""
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+import torch.optim as optim
 
 
 class Net(nn.Module):
-    """Policy-value network module"""
-    def __init__(self, board_width, board_height):
+    """Convolutional policy-value network over a (vocab x length) sequence grid."""
+
+    def __init__(self, seq_width, vocab_height):
         super(Net, self).__init__()
+        self.seq_width = seq_width
+        self.vocab_height = vocab_height
+        flat_dim = seq_width * vocab_height
 
-        self.board_width = board_width
-        self.board_height = board_height
-        self.conv1 = nn.Conv1d(20, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv1d(32, 64, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv1d(64, 128, kernel_size=3, padding=1)
-        self.act_conv1 = nn.Conv1d(128, 80, kernel_size=3, padding=1)
-        self.act_fc1 = nn.Linear(4 * board_width * board_height, board_width * board_height)
-        self.val_conv1 = nn.Conv1d(128, 20, kernel_size=3, padding=1)
-        self.val_fc1 = nn.Linear(board_width * board_height, 128)
-        self.val_fc2 = nn.Linear(128, 1)
+        trunk_channels = (20, 32, 64, 128)
+        trunk_layers = []
+        for in_c, out_c in zip(trunk_channels[:-1], trunk_channels[1:]):
+            trunk_layers.append(nn.Conv1d(in_c, out_c, kernel_size=3, padding=1))
+            trunk_layers.append(nn.ReLU(inplace=True))
+        self.trunk = nn.Sequential(*trunk_layers)
 
-    def forward(self, state_input):
-        x = F.relu(self.conv1(state_input))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-        
-        x_act = F.relu(self.act_conv1(x))
-        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
-        x_act = F.log_softmax(self.act_fc1(x_act), dim=1)
-        
-        x_val = F.relu(self.val_conv1(x))
-        x_val = x_val.view(-1, self.board_width * self.board_height)
-        x_val = torch.tanh(self.val_fc2(F.relu(self.val_fc1(x_val))))
-        
-        return x_act, x_val
+        self.policy_conv = nn.Conv1d(128, 80, kernel_size=3, padding=1)
+        self.policy_head = nn.Linear(4 * flat_dim, flat_dim)
+
+        self.value_conv = nn.Conv1d(128, 20, kernel_size=3, padding=1)
+        self.value_hidden = nn.Linear(flat_dim, 128)
+        self.value_out = nn.Linear(128, 1)
+
+    def forward(self, x):
+        features = self.trunk(x)
+
+        policy = F.relu(self.policy_conv(features))
+        policy = policy.reshape(policy.size(0), -1)
+        policy = F.log_softmax(self.policy_head(policy), dim=1)
+
+        value = F.relu(self.value_conv(features))
+        value = value.reshape(value.size(0), -1)
+        value = F.relu(self.value_hidden(value))
+        value = torch.tanh(self.value_out(value))
+
+        return policy, value
 
 
 class PolicyValueNet:
-    """Policy-value network"""
-    def __init__(self, board_width, board_height, model_file=None, use_gpu=False):
+    """Wraps :class:`Net` with train/inference helpers used by the MCTS search."""
+
+    def __init__(self, width, height, model_file=None, use_gpu=False):
         self.use_gpu = use_gpu
-        self.board_width = board_width
-        self.board_height = board_height
-        self.l2_const = 1e-4
-        
-        self.policy_value_net = Net(board_width, board_height).cuda() if self.use_gpu else Net(board_width, board_height)
-        self.optimizer = optim.Adam(self.policy_value_net.parameters(), weight_decay=self.l2_const)
+        self.width = width
+        self.height = height
+        self.weight_decay = 1e-4
+        self.device = torch.device("cuda" if use_gpu else "cpu")
+
+        self.net = Net(width, height).to(self.device)
+        self.optimizer = optim.Adam(
+            self.net.parameters(), weight_decay=self.weight_decay
+        )
 
         if model_file:
-            net_params = torch.load(model_file)
-            self.policy_value_net.load_state_dict(net_params)
+            self.net.load_state_dict(torch.load(model_file))
+
+    def _to_tensor(self, array):
+        return torch.as_tensor(np.asarray(array), dtype=torch.float32, device=self.device)
 
     def policy_value(self, state_batch):
-        state_batch_np = np.array(state_batch)
-        state_batch = Variable(torch.FloatTensor(state_batch_np).cuda() if self.use_gpu else torch.FloatTensor(state_batch))
-        log_act_probs, value = self.policy_value_net(state_batch)
-        act_probs = np.exp(log_act_probs.data.cpu().numpy() if self.use_gpu else log_act_probs.data.numpy())
-        return act_probs, value.data.cpu().numpy() if self.use_gpu else value.data.numpy()
+        batch = self._to_tensor(state_batch)
+        with torch.no_grad():
+            log_probs, value = self.net(batch)
+        probs = np.exp(log_probs.detach().cpu().numpy())
+        return probs, value.detach().cpu().numpy()
 
     def policy_value_fn(self, board):
         legal_positions = board.availables
-        current_state = np.expand_dims(board.current_state(), axis=0)
-        current_state = np.ascontiguousarray(current_state)
-
-        log_act_probs, value = self.policy_value_net(Variable(torch.from_numpy(current_state).cuda().float() if self.use_gpu else torch.from_numpy(current_state).float()))
-        act_probs = np.exp(log_act_probs.data.cpu().numpy().flatten() if self.use_gpu else log_act_probs.data.numpy().flatten())
-        act_probs = zip(legal_positions, act_probs[legal_positions])
-        value = value.data[0][0]
-        return act_probs, value
+        state = np.ascontiguousarray(
+            np.expand_dims(board.current_state(), axis=0)
+        )
+        board_tensor = self._to_tensor(state)
+        with torch.no_grad():
+            log_probs, value = self.net(board_tensor)
+        probs = np.exp(log_probs.detach().cpu().numpy().flatten())
+        legal_probs = zip(legal_positions, probs[legal_positions])
+        return legal_probs, value.detach().cpu().numpy()[0][0]
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
-        state_batch = Variable(torch.FloatTensor(np.array(state_batch)).cuda() if self.use_gpu else torch.FloatTensor(state_batch))
-        mcts_probs = Variable(torch.FloatTensor(np.array(mcts_probs)).cuda() if self.use_gpu else torch.FloatTensor(mcts_probs))
-        winner_batch = Variable(torch.FloatTensor(np.array(winner_batch)).cuda() if self.use_gpu else torch.FloatTensor(winner_batch))
+        states = self._to_tensor(state_batch)
+        target_probs = self._to_tensor(mcts_probs)
+        target_value = self._to_tensor(winner_batch)
 
+        for group in self.optimizer.param_groups:
+            group["lr"] = lr
         self.optimizer.zero_grad()
-        set_learning_rate(self.optimizer, lr)
 
-        log_act_probs, value = self.policy_value_net(state_batch)
-        value_loss = F.mse_loss(value.view(-1), winner_batch)
-        policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
-        loss = value_loss + policy_loss
+        log_probs, value = self.net(states)
+        value_term = F.mse_loss(value.view(-1), target_value)
+        policy_term = -torch.mean(torch.sum(target_probs * log_probs, dim=1))
+        loss = value_term + policy_term
         loss.backward()
         self.optimizer.step()
 
-        entropy = -torch.mean(torch.sum(torch.exp(log_act_probs) * log_act_probs, 1))
+        with torch.no_grad():
+            entropy = -torch.mean(
+                torch.sum(torch.exp(log_probs) * log_probs, dim=1)
+            )
         return loss.item(), entropy.item()
 
     def get_policy_param(self):
-        return self.policy_value_net.state_dict()
+        return self.net.state_dict()
 
     def save_model(self, model_file):
         torch.save(self.get_policy_param(), model_file)
